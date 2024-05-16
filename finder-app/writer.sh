@@ -1,20 +1,15 @@
+
 #!/bin/bash
 
-if [ $# != 2 ]
-then 
-	echo -e "Invalid parameters, correct format should be:\nwriter.sh [writefile] [writestr]"
+if [ $# -lt 2 ]; then
+        echo "Error: Argument missing!"
+        exit 1
 fi
 
-WRITEFILE=$1
-WRITESTR=$2
 
-mkdir -p "$(dirname "${WRITEFILE}")"
-echo "${WRITESTR}" > "${WRITEFILE}"
+for file_path_info in "$1"; do
+	mkdir -p -- "$(dirname -- "$file_path_info")"
+	touch -- "$file_path_info"
+done
 
-if [ $? != 0 ]
-then 
-	echo "Failed to create the file"
-	exit 1
-fi
-
-exit 0
+echo "$2" >> "$1"

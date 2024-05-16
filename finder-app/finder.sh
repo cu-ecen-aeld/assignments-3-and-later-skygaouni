@@ -1,24 +1,13 @@
 #!/bin/bash
 
-if [ $# != 2 ]
-then
+dir="$1"
 
-	echo -e "Invalid parameter, correct format should be:\nfinder.sh [filesdir] [searchstr]"
+if [[ $# -lt 2 || ! -d "$dir" ]]; then	
+	echo "NOT ENOUGH ARGUMENT or $1 is not a directory "
 	exit 1
-fi
-
-
-FILESDIR=$1
-SEARCHSTR=$2
-
-if [ -d "${FILESDIR}" ]
-then	
-	FILESCOUNT=$(find "${FILESDIR}" -type f | wc -l)
-	LINESCOUNT=$(grep -r "${SEARCHSTR}" "${FILESDIR}" | wc -l)
-	echo "The number of files are ${FILESCOUNT} and the number of matching lines are ${LINESCOUNT}"
 else
-	echo "${FILESDIR}: directory doesn't exist"
-	exit 1	
+	echo "$1 is a directory"
+	number_of_files=$(find $1 -type f | wc -l)
+	number_of_text=$(grep -Rnw $1 -e "$2" | wc -l)
+	echo "The number of files are $number_of_files and the number of matching lines are $number_of_text"
 fi
-
-exit 0
