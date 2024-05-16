@@ -7,6 +7,7 @@ then
 	exit 1
 fi
 
+
 FILESDIR=$1
 SEARCHSTR=$2
 
