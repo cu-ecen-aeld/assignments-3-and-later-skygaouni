@@ -7,6 +7,7 @@ make clean
 # 使用本地编译器编译 writer 应用程序
 make
 
+
 # 变量定义
 WRITER=./writer
 WRITER_SCRIPT_PATH=$(realpath $(dirname $0))/writer.sh
