@@ -1,11 +1,5 @@
-CC := gcc
-CROSS_COMPILE :=
+CC = $(CROSS_COMPILE)gcc
 
-ifdef CROSS_COMPILE
-	CC := $(CROSS_COMPILE)$(CC)
-endif
-
-.PHONY: clean
 
 writer: writer.o
 	$(CC) -o writer writer.o
@@ -15,3 +9,4 @@ writer.o: writer.c
 
 clean:
 	rm -f writer *.o
+.PHONY: all clean
