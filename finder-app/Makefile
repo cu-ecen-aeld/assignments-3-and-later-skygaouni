@@ -1,27 +1,17 @@
-# 定义编译器和编译选项
-CC = $(CROSS_COMPILE)gcc
-CFLAGS = -Wall -Wextra -std=c11
+CC := gcc
+CROSS_COMPILE :=
 
-# 目标文件
-TARGET = writer
-SRC = finder-app/writer.c
-OBJ = $(SRC:.c=.o)
+ifdef CROSS_COMPILE
+	CC := $(CROSS_COMPILE)$(CC)
+endif
 
-# 默认目标：构建应用程序
-all: $(TARGET)
+.PHONY: clean
 
-# 构建目标应用程序
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^
+writer: writer.o
+	$(CC) -o writer writer.o
 
-# 生成目标文件的规则
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+writer.o: writer.c
+	$(CC) -c writer.c
 
-# 清理目标：删除生成的应用程序和所有.o文件
 clean:
-	rm -f $(TARGET) $(OBJ)
-
-# 声明伪目标
-.PHONY: all clean
-
+	rm -f writer *.o
