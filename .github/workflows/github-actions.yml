@@ -16,14 +16,23 @@ jobs:
           - name: Run unit test
             run: ./unit-test.sh
 <<<<<<< HEAD
+<<<<<<< HEAD
     full-test:
         container: cuaesd/aesd-autotest:assignment2
         runs-on: ubuntu-latest
+=======
+    full-test:
+        container: cuaesd/aesd-autotest:assignment3
+        runs-on: self-hosted
+>>>>>>> assignments-base/assignment3-part-2
         steps:
           - uses: actions/checkout@v2
           - name: Checkout submodules
             run : git submodule update --init --recursive
           - name: Run full test
             run: ./full-test.sh
+<<<<<<< HEAD
 =======
 >>>>>>> assignments-base/assignment3-part-1
+=======
+>>>>>>> assignments-base/assignment3-part-2
