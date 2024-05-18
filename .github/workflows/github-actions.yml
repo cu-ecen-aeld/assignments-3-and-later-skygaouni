@@ -19,6 +19,7 @@ jobs:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     full-test:
         container: cuaesd/aesd-autotest:assignment2
         runs-on: ubuntu-latest
@@ -42,3 +43,6 @@ jobs:
 >>>>>>> 68a94a320757d1fe7bd0347fdd0bf8b7997c76b9
 =======
 >>>>>>> assignments-base/assignment4
+=======
+
+>>>>>>> 123c261289eb39a40ca389ce8442c9273b1f4ee0
