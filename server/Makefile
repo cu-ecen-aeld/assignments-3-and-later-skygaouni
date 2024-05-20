@@ -1,13 +1,11 @@
-CC ?= gcc
-CFLAGS = -Wall -Werror
-TARGET = aesdsocket
+CC = gcc
+CFLAGS = -Wall -Wextra 
+LDFLAGS = -lpthread
 
-all: $(TARGET)
-default: $(TARGET)
+all: aesdsocket
 
-$(TARGET): $(TARGET).c
-	$(CC) $(CFLAGS) -o $(TARGET) $(TARGET).c
+aesdsocket: aesdsocket.c
+	$(CC) $(CFLAGS) aesdsocket.c -o aesdsocket $(LDFLAGS)
 
 clean:
-	rm -f $(TARGET)
-
+	rm -f aesdsocket

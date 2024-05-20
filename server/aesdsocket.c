@@ -1,113 +1,210 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <syslog.h>
+#include <signal.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <signal.h>
-#include <string.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <syslog.h>
 
 #define PORT 9000
 #define DATA_FILE "/var/tmp/aesdsocketdata"
 
-static volatile int keep_running = 1;
+volatile sig_atomic_t running = 1;
 
-void signal_handler(int sig) {
-    keep_running = 0;
+void signal_handler(int signo)
+{
+    if (signo == SIGINT || signo == SIGTERM)
+    {
+        running = 0;
+        syslog(LOG_INFO, "Caught signal, exiting");
+    }
 }
 
-int main(int argc, char *argv[]) {
-    int server_fd, client_fd;
-    struct sockaddr_in address;
-    int opt = 1;
-    socklen_t addrlen = sizeof(address);
-    char buffer[1024] = {0};
+void cleanup(int server_socket)
+{
+    // Clean up and exit
+    syslog(LOG_INFO, "Cleaning up and exiting");
 
-    // 解析命令行参数，检查是否有 -d 参数
+    // Close server socket
+    if (shutdown(server_socket, SHUT_RDWR) == -1)
+    {
+        perror("Error shutting down server socket");
+    }
+
+    if (close(server_socket) == -1)
+    {
+        perror("Error closing server socket");
+    }
+
+    // Delete the data file
+    unlink(DATA_FILE);
+
+    // Close syslog
+    closelog();
+
+    exit(EXIT_SUCCESS);
+}
+
+void daemonize()
+{
+    pid_t pid = fork();
+
+    if (pid < 0)
+    {
+        perror("Error forking");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid > 0)
+    {
+        // Parent process exits
+        exit(EXIT_SUCCESS);
+    }
+
+    // Child process continues
+    umask(0);
+    if (setsid() < 0)
+    {
+        perror("Error setting session ID");
+        exit(EXIT_FAILURE);
+    }
+
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+}
+
+void handle_client(int client_socket, int server_socket)
+{
+    struct sockaddr_in client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+
+    if (getpeername(client_socket, (struct sockaddr *)&client_addr, &client_addr_len) == 0)
+    {
+        char client_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(client_addr.sin_addr), client_ip, INET_ADDRSTRLEN);
+        syslog(LOG_INFO, "Accepted connection from %s", client_ip);
+    }
+
+    char buffer[1024];
+    ssize_t bytes_received;
+
+    while ((bytes_received = recv(client_socket, buffer, sizeof(buffer), 0)) > 0)
+    {
+        int data_fd = open(DATA_FILE, O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+        if (data_fd == -1)
+        {
+            perror("Error opening data file");
+            cleanup(server_socket);
+        }
+
+        write(data_fd, buffer, bytes_received);
+        close(data_fd);
+
+        if (memchr(buffer, '\n', bytes_received) != NULL)
+        {
+            int file_fd = open(DATA_FILE, O_RDONLY);
+            if (file_fd == -1)
+            {
+                perror("Error opening data file for reading");
+                cleanup(server_socket);
+            }
+
+            char file_buffer[1024];
+            ssize_t bytes_read;
+
+            while ((bytes_read = read(file_fd, file_buffer, sizeof(file_buffer))) > 0)
+            {
+                send(client_socket, file_buffer, bytes_read, 0);
+            }
+
+            close(file_fd);
+            break;
+        }
+    }
+
+    syslog(LOG_INFO, "Closed connection from %s", inet_ntoa(client_addr.sin_addr));
+    close(client_socket);
+}
+
+int main(int argc, char *argv[])
+{
     int daemon_mode = 0;
-    int c;
 
-    while ((c = getopt(argc, argv, "d")) != -1) {
-        switch (c) {
-            case 'd':
-                daemon_mode = 1;
-                break;
-            default:
-                exit(EXIT_FAILURE);
-        }
+    if (argc > 1 && strcmp(argv[1], "-d") == 0)
+    {
+        daemon_mode = 1;
     }
 
-    if (daemon_mode) {
-        pid_t pid = fork();
-        
-        if (pid < 0) {
-            exit(EXIT_FAILURE);
-        }
+    openlog("aesdsocket", LOG_PID, LOG_USER);
+    syslog(LOG_INFO, "Starting aesdsocket");
 
-        if (pid > 0) {
-            // 父进程退出
-            exit(EXIT_SUCCESS);
-        }
+    // Set up signal handlers using sigaction for better control
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
 
-        // 在子进程中
-        if (setsid() < 0) {
-            exit(EXIT_FAILURE);
-        }
-
-        // 关闭标准输入输出错误
-        close(STDIN_FILENO);
-        close(STDOUT_FILENO);
-        close(STDERR_FILENO);
-    }
-
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
-
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd == 0) {
-        perror("Socket failed");
-        exit(EXIT_FAILURE);
-    }
-    
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
-
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
-
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("Bind failed");
+    if (sigaction(SIGINT, &sa, NULL) == -1 || sigaction(SIGTERM, &sa, NULL) == -1)
+    {
+        perror("Error setting up signal handlers");
         exit(EXIT_FAILURE);
     }
 
-    if (listen(server_fd, 3) < 0) {
-        perror("Listen failed");
-        exit(EXIT_FAILURE);
+    int server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_socket == -1)
+    {
+        perror("Error creating socket");
+        cleanup(server_socket);
     }
 
-    while (keep_running) {
-        client_fd = accept(server_fd, (struct sockaddr *)&address, &addrlen);
-        if (client_fd < 0) {
-            perror("Accept failed");
-            continue;
-        }
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
 
-        // 这里应该添加接收和处理数据的代码
-        // Read data sent by the client
-        ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
-        if (bytes_read < 0) {
-            perror("Read failed");
-        } else {
-            buffer[bytes_read] = '\0'; // Null-terminate the string
-            printf("Received data: %s\n", buffer); // Just for example
-        }
-        close(client_fd);
+    int reuse = 1;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
+    {
+        perror("setsockopt(SO_REUSEADDR) failed");
+        cleanup(server_socket);
     }
 
-    close(server_fd);
+    if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("Error binding socket");
+        cleanup(server_socket);
+    }
+
+    if (listen(server_socket, 5) == -1)
+    {
+        perror("Error listening for connections");
+        cleanup(server_socket);
+    }
+
+    if (daemon_mode)
+    {
+        daemonize();
+    }
+    while (running)
+    {
+        int client_socket = accept(server_socket, NULL, NULL);
+        if (client_socket == -1)
+        {
+            perror("Error accepting connection");
+            cleanup(server_socket);
+        }
+
+        handle_client(client_socket, server_socket);
+    }
+
+    cleanup(server_socket); // Cleanup if the loop exits
+
     return 0;
 }
 
