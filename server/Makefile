@@ -1,21 +1,13 @@
-EXECUTABLE_NAME = aesdsocket
-CROSS_COMPILE = 0
-
 CC ?= gcc
-C_STANDARD = gnu99
-CFLAGS = -g -Wall -Wextra
-LDFLAGS = -lpthread -pthread
+CFLAGS = -Wall -Werror
+TARGET = aesdsocket
 
-COMPILER_CALL = $(CC) $(CFLAGS) $(LDFLAGS)
+all: $(TARGET)
+default: $(TARGET)
 
-all: aesdsocket
-default: aesdsocket
-
-aesdsocket: aesdsocket.o
-	@$(COMPILER_CALL) aesdsocket.o -o $(EXECUTABLE_NAME)
+$(TARGET): $(TARGET).c
+	$(CC) $(CFLAGS) -o $(TARGET) $(TARGET).c
 
 clean:
-	@rm -f *.o && rm -f $(EXECUTABLE_NAME)
+	rm -f $(TARGET)
 
-aesdsocket.o:
-	@$(COMPILER_CALL) aesdsocket.c -c
